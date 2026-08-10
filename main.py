@@ -73,7 +73,7 @@ def main():
             latest_row = oos_results.iloc[-1]
             last_date = latest_row.name.strftime('%Y-%m-%d') if hasattr(latest_row.name, 'strftime') else str(latest_row.name)[:10]
             conf = latest_row.get("confidence", 0.0)
-            
+            close_price = latest_row.get("Close", 0.0)
             if current_pos == 1:
                 action = "🟢 **BUY (Long)**"
             else:
@@ -82,6 +82,7 @@ def main():
             symbol_block = (
                 f"🔹 **{symbol}**\n"
                 f"• Akcija: {action}\n"
+                f"• Cijena: `{close_price:,.2f}` $\n"
                 f"• Konfidencija: `{conf:.2f}`\n"
                 f"• Status: {status_note}\n"
                 f"• Zadnji bar: `{last_date}`\n"
