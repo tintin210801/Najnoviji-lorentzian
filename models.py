@@ -76,7 +76,12 @@ def run_knn_on_fold(df_train: pd.DataFrame, df_test: pd.DataFrame, K: int = 15, 
         top_k_idx = np.argsort(dists)[:K]
         
         # Konfidencija je prosjek ciljnih vrijednosti K najbližih susjeda
-        conf = float(np.mean(y_roll[top_k_idx]))
+        neighbor_targets = y_roll[top_k_idx]
+        valid_targets = neighbor_targets[~np.isnan(neighbor_targets)]
+        if len(valid_targets) > 0:
+            conf = float(np.mean(valid_targets))
+        else:
+            conf = 0.0
         confidences.append(conf)
 
         # Generiranje sirovog signala na temelju konfidencije i praga
