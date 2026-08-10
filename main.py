@@ -87,6 +87,26 @@ def main():
         
         # Poziv funkcije za crtanje grafa
         plot_equity_curve(oos_results, symbol)
+        latest_row = oos_results.iloc[-1]
+        prev_row = oos_results.iloc[-2]
+        
+        current_pos = latest_row["position"]
+        prev_pos = prev_row["position"]
+        
+        # Detektiramo ako se danas dogodila promjena pozicije
+        if current_pos != prev_pos:
+            action = "🟢 **BUY (Kupi)**" if current_pos == 1 else "🔴 **SELL (Prodaj/Izlaz)**"
+            price = latest_row["Close"]
+            conf = latest_row.get("confidence", 0.0)
+            
+            msg = (
+                f"🚨 **TRADING SIGNAL DETEKTIRAN!** 🚨\n\n"
+                f"• **Simbol:** `{symbol}`\n"
+                f"• **Akcija:** {action}\n"
+                f"• **Cijena:** `${price:,.2f}`\n"
+                f"• **Konfidencija:** `{conf:.2f}`"
+            )
+            send_telegram_message(msg)
     # Završni sažetak za sve simbole
     if summary_results:
         summary_df = pd.DataFrame(summary_results)
