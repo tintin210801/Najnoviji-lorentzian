@@ -44,7 +44,8 @@ def fetch_ohlcv(symbol: str, years_back: int = 4) -> pd.DataFrame:
     today_utc = now_utc.date()
     if not df.empty and df.index[-1].date() == today_utc:
         df = df.iloc[:-1]
-
+    print(f"\n--- ZADNJI REDCI ZA {symbol} (YFINANCE) ---")
+    print(df.tail(10))
     return df
 
 def wma(series: pd.Series, period: int) -> pd.Series:
@@ -140,3 +141,5 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     FEATURES = ["stoch_rsi", "std_20", "price_hma50_ratio", "std_ratio", "rsi_14", "ret_5", "hmm_regime"]
     
     return d.dropna(subset=FEATURES + ["target"])
+
+print(df_raw.tail(10))
