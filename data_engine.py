@@ -142,4 +142,4 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     
     return d.dropna(subset=FEATURES + ["target"])
 
-print(df_raw.tail(10))
+
