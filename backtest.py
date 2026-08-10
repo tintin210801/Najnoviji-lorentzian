@@ -58,42 +58,81 @@ def compute_performance_metrics(df_oos: pd.DataFrame, periods_per_year: int = 36
     }
     return metrics
 
-def print_trade_log(df_oos: pd.DataFrame, symbol: str):
-    """Pronazi i ispisuje svaku promjenu pozicije (BUY / SELL) s cijenama i datumima."""
-    df = df_oos.copy()
-    # Detektiramo promjenu pozicije (1 -> 0 ili 0 -> 1)
-    df["trade_action"] = df["position"].diff()
-    
-    # Filtriramo samo retke gdje se akcija dogodila
-    trades = df[df["trade_action"].isin([1, -1])].copy()
-    
-    if trades.empty:
-        log.info(f"Nema zabilježenih trgovina za {symbol}.")
-        return
+import pandas as pd
 
-    print(f"\n" + "=" * 65)
-    print(f" POVIJEST TRGOVINA (TRADE LOG) ZA: {symbol}")
-    print("=" * 65)
+def print_trade_log(oos_results: pd.DataFrame, symbol: str):
+    """
+    Detaljan ispis svih zatvorenih i aktivnih trgovina na temelju promjene pozicije.
+    Prikazuje točan datum ulaza, izlaza, cijene i ostvareni postotak.
+    """
+    df = oos_results.copy()
     
-    trade_list = []
-    for idx, row in trades.iterrows():
-        action = "BUY (Ulaz u Long)" if row["trade_action"] == 1 else "SELL (Izlaz iz Longa)"
-        price = row["Close"]
-        conf = row.get("confidence", 0.0)
+    # Pridružujemo promjenu pozicije da detektiramo prijelaze 0 -> 1 (Ulaz) i 1 -> 0 (Izlaz)
+    df['pos_change'] = df['position'].diff().fillna(0)
+    
+    trades = []
+    in_trade = False
+    entry_date = None
+    entry_price = None
+    
+    for date, row in df.iterrows():
+        pos = row['position']
+        price = row['Close']
         
-        # Formatiramo datum
-        date_str = idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx)
-        
-        trade_list.append({
-            "Datum": date_str,
-            "Akcija": action,
-            "Cijena ($)": f"{price:,.2f}",
-            "Konfidencija": f"{conf:.2f}"
+        # Ulaz u poziciju (prelazak iz 0 u 1)
+        if not in_trade and pos == 1:
+            in_trade = True
+            entry_date = date
+            entry_price = price
+            
+        # Izlaz iz pozicije (prelazak iz 1 u 0)
+        elif in_trade and pos == 0:
+            in_trade = False
+            exit_date = date
+            exit_price = price
+            ret_pct = ((exit_price - entry_price) / entry_price) * 100
+            
+            trades.append({
+                'entry_date': entry_date.strftime('%Y-%m-%d') if hasattr(entry_date, 'strftime') else str(entry_date)[:10],
+                'entry_price': entry_price,
+                'exit_date': exit_date.strftime('%Y-%m-%d') if hasattr(exit_date, 'strftime') else str(exit_date)[:10],
+                'exit_price': exit_price,
+                'return_pct': ret_pct
+            })
+            
+    # Ako je simulacija završila, a pozicija je i dalje otvorena (još nije došao SELL)
+    if in_trade:
+        last_date = df.index[-1]
+        last_price = df['Close'].iloc[-1]
+        ret_pct = ((last_price - entry_price) / entry_price) * 100
+        trades.append({
+            'entry_date': entry_date.strftime('%Y-%m-%d') if hasattr(entry_date, 'strftime') else str(entry_date)[:10],
+            'entry_price': entry_price,
+            'exit_date': '🟢 AKTIVNO (Drži se)',
+            'exit_price': last_price,
+            'return_pct': ret_pct
         })
         
-    df_trades = pd.DataFrame(trade_list)
-    print(df_trades.to_string(index=False))
-    print("=" * 65 + "\n")
+    # Ispis u konzolu
+    print(f"\n" + "=" * 80)
+    print(f" 📋 DETALJAN TRADE LOG ZA: {symbol}")
+    print("=" * 80)
+    
+    if not trades:
+        print(" Nema zabilježenih trgovina u promatranom razdoblju.")
+        print("=" * 80)
+        return
+        
+    print(f"{'DATUM KUPNJE':<15} | {'CIJENA ULAZA':<12} | {'DATUM PRODAJE':<22} | {'CIJENA IZLAZA':<12} | {'PRINOS':<10}")
+    print("-" * 80)
+    
+    for t in trades:
+        exit_d = t['exit_date']
+        exit_p = f"${t['exit_price']:,.2f}" if isinstance(t['exit_price'], (int, float)) else t['exit_price']
+        ent_p = f"${t['entry_price']:,.2f}"
+        print(f"{t['entry_date']:<15} | {ent_p:<12} | {exit_d:<22} | {exit_p:<12} | {t['return_pct']:>+.2f}%")
+        
+    print("=" * 80)
 
 def plot_equity_curve(df_oos: pd.DataFrame, symbol: str):
     """Crtanje usporedbe kumulativnog prinosa strategije i tržišta (OOS)."""
