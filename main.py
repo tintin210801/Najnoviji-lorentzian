@@ -14,6 +14,7 @@ from data_engine import fetch_ohlcv, build_features
 from wf_engine import WalkForwardEngine
 from models import run_knn_on_fold
 from backtest import compute_performance_metrics, stress_test_noise, plot_equity_curve, print_trade_log
+from telegram_bot import send_telegram_message
 # Konfiguracija logginga
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
