@@ -120,7 +120,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     d["ret_1"] = d["Close"].pct_change(1)
     d["std_10"] = d["Close"].rolling(10).std()
     
-    # Vraćamo HMM Režim kao važnu značajku
+    # HMM Režim kao važna značajka
     d["hmm_regime"] = apply_rolling_hmm_optimized(d)
 
     # Target
@@ -137,9 +137,14 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     d["rsi_14"] = rsi(d["Close"], 14)
     d["stoch_rsi"] = stoch_rsi(d["Close"])
     
-    # Lista značajki koje model koristi (mora sadržavati hmm_regime)
+    # Lista značajki koje model koristi
     FEATURES = ["stoch_rsi", "std_20", "price_hma50_ratio", "std_ratio", "rsi_14", "ret_5", "hmm_regime"]
     
-    return d.dropna(subset=FEATURES + ["target"])
+    # IZMJENA OVDJE: 
+    # Brišemo samo retke gdje fale osnovne značajke (FEATURES), 
+    # ali dopuštamo da 'target' bude NaN na samom kraju (za današnji/najnoviji bar)
+    d = d.dropna(subset=FEATURES)
+    
+    return d
 
 
