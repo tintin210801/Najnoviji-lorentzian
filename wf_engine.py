@@ -27,20 +27,24 @@ class WalkForwardEngine:
     def split_generator(self, df: pd.DataFrame):
         """
         Generator koji vraća train i test DataFrame dijelove za svaki WF korak.
+        Dopušta da posljednji testni prozor obuhvati sve preostale podatke do kraja.
         """
         n = len(df)
         current_idx = self.train_window
 
-        while current_idx + self.test_window <= n:
+        while current_idx < n:
             # In-Sample (Trening) prozor
             train_start = current_idx - self.train_window
             train_end = current_idx
             df_train = df.iloc[train_start:train_end]
 
-            # Out-of-Sample (Test) prozor
+            # Out-of-Sample (Test) prozor - uzima do test_window ili sve do kraja (n)
             test_start = current_idx
-            test_end = current_idx + self.test_window
+            test_end = min(current_idx + self.test_window, n)
             df_test = df.iloc[test_start:test_end]
+
+            if len(df_test) == 0:
+                break
 
             yield df_train, df_test
 
