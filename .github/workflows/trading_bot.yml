@@ -2,7 +2,7 @@ name: Lorentzian Trading Bot
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5' # Pokreće se svaki radni dan u 08:00 UTC
+    - cron: '0 */8 * * *'    # 
   workflow_dispatch:
 
 jobs:
