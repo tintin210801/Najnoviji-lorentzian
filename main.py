@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 # Lista imovine koju pratimo
-SYMBOLS = ["BTC-USD", "ETH-USD", "SOL-USD", VELO-USD]
+SYMBOLS = ["BTC-USD", "ETH-USD", "SOL-USD", "VELO-USD"]
 
 def main():
     log.info("Započinjem dohvat svježih dnevnih signala za Telegram...")
