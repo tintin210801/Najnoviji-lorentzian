@@ -137,21 +137,6 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     d["rsi_14"] = rsi(d["Close"], 14)
     d["stoch_rsi"] = stoch_rsi(d["Close"])
 
-     # 1. Money Flow Index (Volume + Momentum)
-    d["mfi_14"] = tl.MFI(d["High"], d["Low"], d["Close"], d["Volume"], timeperiod=14)
-    
-    # 2. ADX (Snaga trenda)
-    d["adx_14"] = tl.ADX(d["High"], d["Low"], d["Close"], timeperiod=14)
-    
-    # 3. Bollinger Bands %B (Ekstremi cijene)
-    upper_band, middle_band, lower_band = tl.BBANDS(
-        d["Close"], timeperiod=20, nbdevup=2.0, nbdevdn=2.0, matype=tl.MA_Type.SMA
-    )
-    d["bb_pct_b"] = np.where(
-        upper_band == lower_band,
-        0.5,
-        (d["Close"] - lower_band) / (upper_band - lower_band + 1e-10) # + 1e-10 sprječava dijeljenje s nulom
-    )
     
     # Lista značajki koje model koristi
     FEATURES = ["stoch_rsi", "std_20", "price_hma50_ratio", "std_ratio", "rsi_14", "ret_5", "hmm_regime"]
