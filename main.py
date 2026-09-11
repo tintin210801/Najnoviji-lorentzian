@@ -1,7 +1,7 @@
 """
 main.py (Live / Daily Signals)
 -----------------------------
-Pojednostavljena skripta za dnevno slanje svježih signala na Telegram
+skripta za dnevno slanje signala na Telegram
 s ugrađenim pravilom minimalnog držanja od 3 dana (3-day hold).
 """
 
@@ -36,7 +36,7 @@ def main():
         log.info("=" * 60)
         log.info(f"Obrada simbola: {symbol}")
         
-        # 1. Dohvat i obrada podataka (sada uključuje i današnji bar)
+        # 1. Dohvat i obrada podataka
         df_raw = fetch_ohlcv(symbol, years_back=4)
         if df_raw.empty:
             log.warning(f"Preskačem {symbol} jer nema podataka.")
@@ -93,7 +93,7 @@ def main():
             log.error(f"Greška pri pripremi Telegram bloka za {symbol}: {e}")
             report_lines.append(f"🔹 **{symbol}**\n❌ *Greška pri obradi signala*\n")
 
-    # 4. Slanje zbirne poruke na Telegram
+    # 4. Slanje poruke na Telegram
     final_message = "\n".join(report_lines)
     send_telegram_message(final_message)
     log.info("Dnevni signali uspješno poslani na Telegram!")
