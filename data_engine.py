@@ -40,10 +40,6 @@ def fetch_ohlcv(symbol: str, years_back: int = 4) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna()
 
-    # Ukloni današnji nezavršeni bar ako je trgovački dan u tijeku
-    today_utc = now_utc.date()
-    if not df.empty and df.index[-1].date() == today_utc:
-        df = df.iloc[:-1]
     print(f"\n--- ZADNJI REDCI ZA {symbol} (YFINANCE) ---")
     print(df.tail(10))
     return df
