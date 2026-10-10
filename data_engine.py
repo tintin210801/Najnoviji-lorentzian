@@ -16,8 +16,14 @@ from sklearn.preprocessing import StandardScaler
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-def fetch_ohlcv(symbol: str, years_back: int = 4) -> pd.DataFrame:
-    """Dohvaća dnevne OHLCV podatke preko yfinance."""
+def fetch_ohlcv(symbol: str, years_back: int = 4, include_today: bool = True) -> pd.DataFrame:
+    """Dohvaća dnevne OHLCV podatke preko yfinance.
+
+    Args:
+        include_today: Ako True, uključuje današnji (još nezavršeni) bar.
+                       Za crypto je to željeno (24/7 tržište).
+                       Za stocks/dionice stavi False da izbjegneš parcijalni bar.
+    """
     now_utc = datetime.now(timezone.utc)
     yf_start = (now_utc - timedelta(days=years_back * 365)).strftime("%Y-%m-%d")
     yf_end = (now_utc + timedelta(days=2)).strftime("%Y-%m-%d")
@@ -40,10 +46,11 @@ def fetch_ohlcv(symbol: str, years_back: int = 4) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna()
 
-    # Ukloni današnji nezavršeni bar ako je trgovački dan u tijeku
-    today_utc = now_utc.date()
-    if not df.empty and df.index[-1].date() == today_utc:
-        df = df.iloc[:-1]
+    if not include_today:
+        today_utc = now_utc.date()
+        if not df.empty and df.index[-1].date() == today_utc:
+            df = df.iloc[:-1]
+
     print(f"\n--- ZADNJI REDCI ZA {symbol} (YFINANCE) ---")
     print(df.tail(10))
     return df
