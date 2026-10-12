@@ -12,7 +12,8 @@ from data_engine import fetch_ohlcv, build_features
 from wf_engine import WalkForwardEngine
 from models import run_knn_on_fold
 from telegram_bot import send_telegram_message
-
+from data_engine import fetch_ohlcv, build_features, HORIZON
+from wf_engine import WalkForwardEngine
 # Konfiguracija logginga
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def main():
     log.info("Započinjem dohvat svježih dnevnih signala za Telegram...")
     
     # Inicijaliziramo Walk-Forward engine
-    wf = WalkForwardEngine(train_window=400, test_window=90, step=90)
+    wf = WalkForwardEngine(train_window=400, test_window=90, step=90, embargo=HORIZON)
 
     # Pripremamo zaglavlje za zajedničku Telegram poruku
     report_lines = [
