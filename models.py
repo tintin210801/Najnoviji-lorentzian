@@ -141,3 +141,80 @@ if __name__ == "__main__":
         
         print(f"\nUspješno izračunati OOS rezultati. Ukupno redaka: {len(oos_results)}")
         print(oos_results[["Close", "confidence", "size_signal", "position"]].tail(10))
+
+
+def run_live_prediction(df_feat: pd.DataFrame, K=15, window=300,
+                        conf_long=0.60, conf_exit=0.50,
+                        target_vol=0.025, max_exposure=1.0) -> dict:
+    """
+    Izvršava live inferencu na samom kraju DataFrame-a (najnoviji bar)
+    koristeći vašu Lorentzian KNN logiku bez potrebe za Walk-Forward prozorima.
+    """
+    if len(df_feat) < window:
+        log.warning(f"Premalo podataka za live inferencu (pronađeno {len(df_feat)}, traženo {window}).")
+        return None
+
+    X_all = df_feat[FEATURES].values
+    y_all = df_feat["target"].values
+    n_total = len(df_feat)
+    
+    # Uzimamo zadnji red za predikciju (i = n_total - 1)
+    i = n_total - 1
+    roll_start = max(0, i - window)
+    X_roll = X_all[roll_start:i]
+    y_roll = y_all[roll_start:i]
+    x_curr = X_all[i]
+
+    if len(X_roll) < K:
+        log.warning("Nedovoljno povijesnih susjeda u zadnjem prozoru.")
+        return None
+
+    # Skaliranje
+    scaler = StandardScaler()
+    X_roll_scaled = scaler.fit_transform(X_roll)
+    try:
+        x_curr_scaled = scaler.transform(x_curr.reshape(1, -1))[0]
+    except Exception as e:
+        log.error(f"Greška pri skaliranju za live inferencu: {e}")
+        return None
+
+    # Izračun Lorentzian udaljenosti i top K susjeda
+    dists = lorentzian_distance_vectorized(X_roll_scaled, x_curr_scaled)
+    top_k_idx = np.argsort(dists)[:K]
+
+    # Distance-weighted confidence
+    w = 1.0 / (1.0 + dists[top_k_idx])
+    w = w / w.sum()
+    neighbor_targets = y_roll[top_k_idx]
+    valid_mask = ~np.isnan(neighbor_targets)
+    
+    if valid_mask.sum() > 0:
+        conf = float(np.sum(w[valid_mask] * neighbor_targets[valid_mask]) / np.sum(w[valid_mask]))
+    else:
+        conf = 0.0
+
+    # Skaliranje i izračun izloženosti
+    conf_scalar = np.clip((conf - conf_long) / (0.85 - conf_long), 0.0, 1.0)
+    atr_pct = float(df_feat["atr_pct"].iloc[i]) if "atr_pct" in df_feat else 0.02
+    vol_scalar = float(np.clip(target_vol / (atr_pct + 1e-10), 0.0, 1.0))
+    regime = int(df_feat["hmm_regime"].iloc[i-1]) if i > 0 else 1
+    regime_scalar = REGIME_SCALE.get(regime, 0.5)
+
+    target_size = float(np.clip(conf_scalar * vol_scalar * regime_scalar, 0.0, max_exposure))
+    
+    # Odluka o poziciji na temelju praga
+    if conf >= conf_long and target_size > 0:
+        position = 1.0
+    else:
+        position = 0.0
+
+    last_date = df_feat.index[i].strftime('%Y-%m-%d') if hasattr(df_feat.index[i], 'strftime') else str(df_feat.index[i])[:10]
+    
+    return {
+        "position": position,
+        "confidence": conf,
+        "size": target_size,
+        "last_date": last_date,
+        "close_price": float(df_feat["Close"].iloc[i]),
+        "regime": regime
+    }
