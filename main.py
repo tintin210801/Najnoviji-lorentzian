@@ -2,18 +2,18 @@
 main.py (Live / Daily Signals)
 -----------------------------
 Pojednostavljena skripta za dnevno slanje svježih signala na Telegram
-s ugrađenim pravilom minimalnog držanja od 3 dana (3-day hold).
+korištenjem direktne live inferencije na najnovijem zatvorenom baru.
 """
 
 import logging
 from datetime import datetime
 import pandas as pd
-from data_engine import fetch_ohlcv, build_features
-from wf_engine import WalkForwardEngine
-from models import run_knn_on_fold
-from telegram_bot import send_telegram_message
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+
 from data_engine import fetch_ohlcv, build_features, HORIZON
-from wf_engine import WalkForwardEngine
+from telegram_bot import send_telegram_message
+
 # Konfiguracija logginga
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -21,12 +21,17 @@ log = logging.getLogger(__name__)
 # Lista imovine koju pratimo
 SYMBOLS = ["BTC-USD", "ETH-USD", "SOL-USD", "VELO-USD"]
 
+# Definiramo značajke koje model koristi
+FEATURES = [
+    "stoch_rsi", "std_20", "price_hma50_ratio", "std_ratio",
+    "rsi_14", "ret_5", "hmm_regime",
+    "atr_pct", "body_pct", "close_pos", "upper_wick", "lower_wick",
+    "range_pct", "vol_z", "vol_ratio", "obv_slope"
+]
+
 def main():
     log.info("Započinjem dohvat svježih dnevnih signala za Telegram...")
     
-    # Inicijaliziramo Walk-Forward engine
-    wf = WalkForwardEngine(train_window=400, test_window=90, step=90, embargo=HORIZON)
-
     # Pripremamo zaglavlje za zajedničku Telegram poruku
     report_lines = [
         "📊 **DNEVNI TRADING SIGNALI** 📊",
@@ -37,7 +42,7 @@ def main():
         log.info("=" * 60)
         log.info(f"Obrada simbola: {symbol}")
         
-        # 1. Dohvat i obrada podataka (sada uključuje i današnji bar)
+        # 1. Dohvat i obrada podataka
         df_raw = fetch_ohlcv(symbol, years_back=4)
         if df_raw.empty:
             log.warning(f"Preskačem {symbol} jer nema podataka.")
@@ -45,40 +50,46 @@ def main():
             
         df_feat = build_features(df_raw)
         
-        if len(df_feat) < wf.train_window + 30:
+        if len(df_feat) < 200:
             log.warning(f"Nedovoljno podataka za {symbol} (pronađeno {len(df_feat)} redaka). Preskačem.")
             continue
 
-        # 2. Pokretanje Walk-Forward simulacije za dobivanje Out-of-Sample predikcija
-        log.info(f"Izvršavam Walk-Forward OOS simulaciju za {symbol}...")
-        oos_results = wf.run_walk_forward_simulation(df_feat, run_knn_on_fold)
-        
-        if oos_results.empty or "position" not in oos_results.columns:
-            log.warning(f"Nema OOS rezultata za {symbol}.")
-            report_lines.append(f"🔹 **{symbol}**\n❌ *Nema rezultata predikcije*\n")
-            continue
-
-        # 3. Primjena pravila minimalnog držanja (3-day hold) i priprema Telegram bloka
-                # 3. Primjena pravila minimalnog držanja (3-day hold) i priprema Telegram bloka
-        # 3. Primjena pravila minimalnog držanja (3-day hold) i priprema Telegram bloka
+        # 2. Live Inference (Direktno treniranje na povijesti i predikcija za najnoviji bar)
         try:
-            # Pravilo 3-day hold: ako je unutar zadnja 3 dana bila aktivna pozicija (> 0), drži
-            if (oos_results["position"].tail(3) > 0).any():
-                current_pos = 1
-                status_note = "Aktivno (3-day hold u tijeku)"
-            else:
-                current_pos = 0
-                status_note = "Izvan pozicije / Čeka signal"
-
-            latest_row = oos_results.iloc[-1]
+            log.info(f"Izvršavam live inferencu za {symbol}...")
+            
+            # Odvajamo podatke za trening (maknemo redove gdje nema targeta)
+            df_train = df_feat.dropna(subset=["target"]).copy()
+            
+            X_train = df_train[FEATURES]
+            y_train = df_train["target"]
+            
+            # Uzimamo apsolutno zadnji dostupni red značajki za današnju predikciju
+            X_live = df_feat[FEATURES].iloc[[-1]]
+            
+            # Skaliranje i treniranje KNN modela
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_live_scaled = scaler.transform(X_live)
+            
+            knn = KNeighborsClassifier(n_neighbors=15, weights='distance')
+            knn.fit(X_train_scaled, y_train)
+            
+            pred_prob = knn.predict_proba(X_live_scaled)[0]
+            predicted_class = knn.predict(X_live_scaled)[0]
+            confidence = float(pred_prob[int(predicted_class)])
+            
+            # 3. Priprema Telegram bloka za ovaj simbol
+            latest_row = df_feat.iloc[-1]
             last_date = latest_row.name.strftime('%Y-%m-%d') if hasattr(latest_row.name, 'strftime') else str(latest_row.name)[:10]
-            conf = latest_row.get("confidence", 0.0)
             close_price = latest_row.get("Close", 0.0)
+            
+            current_pos = int(predicted_class)
+            status_note = "Live Inference (Svježi signal)"
 
             if current_pos == 1:
                 action = "🟢 **BUY (Long)**"
-                avg_size = oos_results["position"].tail(3).mean()
-                size_note = f"• Veličina pozicije: `{avg_size*100:.0f}%` kapitala\n"
+                size_note = "• Veličina pozicije: `100%` kapitala\n"
             else:
                 action = "🔴 **SELL (Keš)**"
                 size_note = ""
@@ -87,7 +98,7 @@ def main():
                 f"🔹 **{symbol}**\n"
                 f"• Akcija: {action}\n"
                 f"• Cijena: `{close_price:,.2f}` $\n"
-                f"• Konfidencija: `{conf:.2f}`\n"
+                f"• Konfidencija: `{confidence:.2f}`\n"
                 f"• Status: {status_note}\n"
                 f"{size_note}"
                 f"• Zadnji bar: `{last_date}`\n"
